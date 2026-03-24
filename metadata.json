@@ -1,0 +1,8 @@
+{
+  "name": "InkSight FaceTime",
+  "description": "A high-end, real-time live tattoo consultation experience replicating the iPhone FaceTime interface with AI-powered visual analysis and design generation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
