@@ -18,16 +18,18 @@ async function startServer() {
   // Endpoint to get ephemeral token for OpenAI Realtime API
   app.post("/api/session", async (req, res) => {
     try {
-      const response = await fetch("https://api.openai.com/v1/realtime/sessions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-realtime-preview", // Using the requested S2S model base
-          voice: "alloy",
-          instructions: `You are a professional tattoo consultant. 
+      const response = await fetch(
+        "https://api.openai.com/v1/realtime/sessions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-realtime-preview", // Using the requested S2S model base
+            voice: "alloy",
+            instructions: `You are a professional tattoo consultant. 
           CRITICAL: You have visual eyes. You will receive screenshots of the user's camera every 500ms.
           Use these images to see the user's skin, existing tattoos, or the area they want to get tattooed.
           Comment on what you see! If they show you their arm, say "I see your arm". 
@@ -35,27 +37,30 @@ async function startServer() {
           Be encouraging, artistic, and professional.
           If the user asks for a sample or a design, use the 'generate_tattoo_design' tool.
           Do not mention that you are receiving screenshots unless asked. Just act like you can see them live.`,
-          modalities: ["text", "audio"],
-          tools: [
-            {
-              type: "function",
-              name: "generate_tattoo_design",
-              description: "Generates a high-quality tattoo design based on a descriptive prompt.",
-              parameters: {
-                type: "object",
-                properties: {
-                  prompt: {
-                    type: "string",
-                    description: "A detailed description of the tattoo design to generate."
-                  }
+            modalities: ["text", "audio"],
+            tools: [
+              {
+                type: "function",
+                name: "generate_tattoo_design",
+                description:
+                  "Generates a high-quality tattoo design based on a descriptive prompt.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    prompt: {
+                      type: "string",
+                      description:
+                        "A detailed description of the tattoo design to generate.",
+                    },
+                  },
+                  required: ["prompt"],
                 },
-                required: ["prompt"]
-              }
-            }
-          ],
-          tool_choice: "auto",
-        }),
-      });
+              },
+            ],
+            tool_choice: "auto",
+          }),
+        },
+      );
 
       const data = await response.json();
       res.json(data);
@@ -65,7 +70,6 @@ async function startServer() {
     }
   });
 
-  // Mock Tattoo Design Generator Tool
   app.post("/api/tools/generate-design", async (req, res) => {
     const prompt: string = req.body?.prompt || "";
 
@@ -75,7 +79,9 @@ async function startServer() {
 
     // Per the Dify MCP tool schema: ONLY use facetime_mcp.
     // And start the prompt with: " a TA-TTT-OO-ME style high resolution... "
-    const facetime_mcp = prompt.startsWith(" a TA-TTT-OO-ME style high resolution")
+    const facetime_mcp = prompt.startsWith(
+      " a TA-TTT-OO-ME style high resolution",
+    )
       ? prompt
       : ` a TA-TTT-OO-ME style high resolution ${prompt}`.trimEnd();
 
@@ -97,7 +103,13 @@ async function startServer() {
 
       if (!initResp.ok) {
         const text = await initResp.text();
-        res.status(502).json({ error: "MCP initialize failed", status: initResp.status, details: text });
+        res
+          .status(502)
+          .json({
+            error: "MCP initialize failed",
+            status: initResp.status,
+            details: text,
+          });
         return;
       }
 
@@ -117,15 +129,25 @@ async function startServer() {
         }),
       });
 
-      const callJson = await callResp.json().catch(async () => ({ raw: await callResp.text() }));
+      const callJson = await callResp
+        .json()
+        .catch(async () => ({ raw: await callResp.text() }));
       if (!callResp.ok) {
-        res.status(502).json({ error: "MCP tools/call failed", status: callResp.status, details: callJson });
+        res
+          .status(502)
+          .json({
+            error: "MCP tools/call failed",
+            status: callResp.status,
+            details: callJson,
+          });
         return;
       }
 
       const text = callJson?.result?.content?.[0]?.text;
       if (typeof text !== "string") {
-        res.status(502).json({ error: "Unexpected MCP response shape", details: callJson });
+        res
+          .status(502)
+          .json({ error: "Unexpected MCP response shape", details: callJson });
         return;
       }
 
@@ -133,7 +155,12 @@ async function startServer() {
       try {
         parsed = JSON.parse(text);
       } catch {
-        res.status(502).json({ error: "Failed to parse MCP tool text as JSON", rawText: text });
+        res
+          .status(502)
+          .json({
+            error: "Failed to parse MCP tool text as JSON",
+            rawText: text,
+          });
         return;
       }
 
@@ -150,7 +177,12 @@ async function startServer() {
       const imageUrl = Array.isArray(outputs) ? outputs[0] : undefined;
 
       if (!imageUrl) {
-        res.status(502).json({ error: "No image URL found in MCP output", details: { parsed, body } });
+        res
+          .status(502)
+          .json({
+            error: "No image URL found in MCP output",
+            details: { parsed, body },
+          });
         return;
       }
 
