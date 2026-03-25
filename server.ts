@@ -67,12 +67,98 @@ async function startServer() {
 
   // Mock Tattoo Design Generator Tool
   app.post("/api/tools/generate-design", async (req, res) => {
-    const { prompt } = req.body;
-    // In a real scenario, this would call an image generation API (DALL-E 3 or similar)
-    // For now, we'll return a high-quality placeholder from Picsum with a descriptive seed
-    const seed = encodeURIComponent(prompt || "tattoo");
-    const imageUrl = `https://picsum.photos/seed/${seed}/800/1200`;
-    res.json({ imageUrl });
+    const prompt: string = req.body?.prompt || "";
+
+    // Dify MCP server (no auth as per your instructions)
+    const MCP_URL = "https://api.dify.ai/mcp/server/pr44VVol6dVCBNuZ/mcp";
+    const TOOL_NAME = "TaTTTy-MCP";
+
+    // Per the Dify MCP tool schema: ONLY use facetime_mcp.
+    // And start the prompt with: " a TA-TTT-OO-ME style high resolution... "
+    const facetime_mcp = prompt.startsWith(" a TA-TTT-OO-ME style high resolution")
+      ? prompt
+      : ` a TA-TTT-OO-ME style high resolution ${prompt}`.trimEnd();
+
+    try {
+      const initResp = await fetch(MCP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2024-11-05",
+            capabilities: {},
+            clientInfo: { name: "InkSight", version: "1.0.0" },
+          },
+        }),
+      });
+
+      if (!initResp.ok) {
+        const text = await initResp.text();
+        res.status(502).json({ error: "MCP initialize failed", status: initResp.status, details: text });
+        return;
+      }
+
+      const callResp = await fetch(MCP_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 3,
+          method: "tools/call",
+          params: {
+            name: TOOL_NAME,
+            arguments: {
+              facetime_mcp,
+            },
+          },
+        }),
+      });
+
+      const callJson = await callResp.json().catch(async () => ({ raw: await callResp.text() }));
+      if (!callResp.ok) {
+        res.status(502).json({ error: "MCP tools/call failed", status: callResp.status, details: callJson });
+        return;
+      }
+
+      const text = callJson?.result?.content?.[0]?.text;
+      if (typeof text !== "string") {
+        res.status(502).json({ error: "Unexpected MCP response shape", details: callJson });
+        return;
+      }
+
+      let parsed: any;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        res.status(502).json({ error: "Failed to parse MCP tool text as JSON", rawText: text });
+        return;
+      }
+
+      let body: any = parsed?.body;
+      if (typeof body === "string") {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          // keep as string
+        }
+      }
+
+      const outputs: string[] | undefined = body?.output;
+      const imageUrl = Array.isArray(outputs) ? outputs[0] : undefined;
+
+      if (!imageUrl) {
+        res.status(502).json({ error: "No image URL found in MCP output", details: { parsed, body } });
+        return;
+      }
+
+      res.json({ imageUrl, outputs, raw: callJson });
+    } catch (error) {
+      console.error("Error calling Dify MCP:", error);
+      res.status(500).json({ error: "Failed to generate design via MCP" });
+    }
   });
 
   if (process.env.NODE_ENV !== "production") {
